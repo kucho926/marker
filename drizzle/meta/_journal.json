@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789302877619,
+      "tag": "0000_sudden_roland_deschain",
+      "breakpoints": true
+    }
+  ]
+}
