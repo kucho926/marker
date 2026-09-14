@@ -5,4 +5,5 @@ const manifest = JSON.parse(await readFile("dist/.openai/hosting.json", "utf8"))
 const worker = await import(pathToFileURL(new URL("../dist/server/index.js", import.meta.url).pathname));
 assert.equal(typeof worker.default?.fetch, "function");
 assert.equal(manifest.d1, "DB");
+assert.equal(manifest.r2, "FILES");
 console.log("Worker artifact valid");
