@@ -2,6 +2,7 @@ import worker from "../worker/index.js";
 import page from "../worker/page.js";
 
 if (!page.includes('이름과 PIN') || !page.includes('새 문제지는 여기에 계속 쌓입니다') || !page.includes('관리자 로그인')) throw new Error('account UI missing');
+if (!page.includes('온라인 문제 파일') || !page.includes('정답이나 해설이 보이지 않는 것')) throw new Error('safe worksheet upload UI missing');
 if (page.includes('?set=') || page.includes('친구용 채점 링크')) throw new Error('legacy multi-link UI remains');
 
 const DB={prepare(){return{bind(){return this},async first(){return null},async all(){return{results:[]}},async run(){return{meta:{changes:1}}}}},async batch(){return[]}};
