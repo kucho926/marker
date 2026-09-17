@@ -70,7 +70,7 @@ async function regradeProgress(id,env,set){
 }
 
 async function makeHashes(questions,salt){const hashes=[];for(const q of questions){const variants=String(q.answer).split("|").map(x=>x.trim()).filter(Boolean).slice(0,8);hashes.push(await Promise.all(variants.map(v=>answerHash(salt,v))))}return hashes}
-function validQuestions(body){const qs=Array.isArray(body.questions)?body.questions:[];if(qs.length<1||qs.length>40||qs.some(q=>!String(q.answer||"").trim()))return null;return qs.map(q=>({type:q.type==="choice"?"choice":"short",answer:String(q.answer).slice(0,300).trim()}))}
+function validQuestions(body){const qs=Array.isArray(body.questions)?body.questions:[];if(qs.length<1||qs.length>40||qs.some(q=>!q||!String(q.answer||"").trim()))return null;const questions=qs.map(q=>({type:q.type==="choice"?"choice":"short",answer:String(q.answer).slice(0,300).trim()}));for(const q of questions){if(q.type==="choice"){const options=q.answer.normalize("NFKC").split("|").map(x=>x.trim());if(options.some(x=>!["1","2","3","4","5"].includes(x)))return null;q.answer=options.join("|")}}return questions}
 async function createAssignment(request,env){const s=await requireSession(request,env,"admin");if(s instanceof Response)return s;const body=await request.json(),questions=validQuestions(body);if(!questions)return json({error:"invalid_questions"},400);const id=random(18),salt=random(16),title=String(body.title||"오늘의 문제").trim().slice(0,80)||"오늘의 문제",types=questions.map(q=>q.type),now=new Date().toISOString();await env.DB.prepare("INSERT INTO assignments (id,title,question_count,types_json,salt,owner_hash,hashes_json,current_answers_json,attempt_count,answer_keys_json,is_active,updated_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id,title,questions.length,JSON.stringify(types),salt,"",JSON.stringify(await makeHashes(questions,salt)),"[]",0,JSON.stringify(questions),body.isActive===false?0:1,now,now).run();return json({id},201)}
 async function updateAssignment(id,request,env){
  const auth=await requireSession(request,env,"admin");if(auth instanceof Response)return auth;
@@ -80,7 +80,7 @@ async function updateAssignment(id,request,env){
  const questions=validQuestions(body);if(!questions)return json({error:"invalid_questions"},400);
  const changed=JSON.stringify(questions)!==JSON.stringify(parse(row.answer_keys_json,[]));
  const types=questions.map(q=>q.type);
- if(changed&&(questions.length!==row.question_count||JSON.stringify(types)!==row.types_json))return json({error:"structure_locked"},409);
+ if(changed&&(questions.length!==row.question_count))return json({error:"structure_locked"},409);
  const salt=changed?random(16):row.salt,hashes=await makeHashes(questions,salt);
  const saved=await env.DB.prepare("UPDATE assignments SET title=?,question_count=?,types_json=?,salt=?,hashes_json=?,answer_keys_json=?,is_active=?,updated_at=? WHERE id=? AND salt=?").bind(title,questions.length,JSON.stringify(types),salt,JSON.stringify(hashes),JSON.stringify(questions),active,now,id,row.salt).run();
  if(!saved.meta?.changes)return json({error:"try_again"},409);
