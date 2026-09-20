@@ -124,10 +124,24 @@ async function resolveQuestion(request,env){
 }
 async function listQuestions(request,env){
  const auth=await session(request,env,"admin")||await session(request,env,"student");if(!auth)return json({error:"unauthorized"},401);
- const url=new URL(request.url),cursor=url.searchParams.get("cursor")||undefined;if(cursor&&cursor.length>4096)return json({error:"invalid_cursor"},400);
- const prefix=auth.role==="admin"?"questions/":"questions/"+encodeURIComponent(auth.userId)+"/",page=await env.FILES.list({prefix,limit:50,cursor});
- const items=await Promise.all(page.objects.map(async o=>{const obj=await env.FILES.get(o.key);if(!obj)return null;const q=await obj.json();return {key:o.key,version:obj.etag,studentName:q.studentName,assignmentTitle:q.assignmentTitle,assignmentId:q.assignmentId||decodeURIComponent(o.key.split("/")[2]),question:q.question,page:Number.isInteger(q.page)?q.page:null,createdAt:q.createdAt,updatedAt:q.updatedAt||q.createdAt,status:q.status||"open",requestCount:q.requestCount||1}}));
- return json({questions:items.filter(Boolean),cursor:page.truncated?page.cursor:null});
+ const url=new URL(request.url),requested=url.searchParams.get("status"),query=(url.searchParams.get("q")||"").trim().toLocaleLowerCase("ko");
+ if(requested!==null&&!(["open","resolved"].includes(requested))||query.length>80)return json({error:"invalid_filter"},400);
+ let cursor=url.searchParams.get("cursor")||undefined;if(cursor&&cursor.length>4096)return json({error:"invalid_cursor"},400);
+ const prefix=auth.role==="admin"?"questions/":"questions/"+encodeURIComponent(auth.userId)+"/",items=[];
+ // Keep the legacy unfiltered endpoint working. Filtered views scan in bounded chunks,
+ // then continue from the R2 cursor so old resolved questions never hide new open ones.
+ const maxPages=requested!==null||query?20:1;
+ for(let scan=0;scan<maxPages;scan++){
+  const page=await env.FILES.list({prefix,limit:50,cursor});
+  const found=await Promise.all(page.objects.map(async o=>{const obj=await env.FILES.get(o.key);if(!obj)return null;const q=await obj.json();if(requested&&((q.status||"open")==="resolved"?"resolved":"open")!==requested)return null;
+   if(query){const fields=[q.assignmentTitle,q.studentName,String(q.page||"")+"페이지",String(q.question||"")+"번"];if(!fields.some(v=>String(v||"").toLocaleLowerCase("ko").includes(query)))return null}
+   return {key:o.key,version:obj.etag,studentName:q.studentName,assignmentTitle:q.assignmentTitle,assignmentId:q.assignmentId||decodeURIComponent(o.key.split("/")[2]),question:q.question,page:Number.isInteger(q.page)?q.page:null,createdAt:q.createdAt,updatedAt:q.updatedAt||q.createdAt,status:q.status||"open",requestCount:q.requestCount||1};
+  }));
+  items.push(...found.filter(Boolean));
+  cursor=page.truncated?page.cursor:null;
+  if(!cursor||items.length>=50)break;
+ }
+ return json({questions:items,cursor:cursor||null});
 }
 
 const sessionKey="settings/next-session.json";
