@@ -95,11 +95,13 @@ function splitAnswerList(value){
  if(stack.length)return null;parts.push(body.slice(from).trim());if(prefix&&parts.some(v=>v.includes('=')))return null;return parts.length>1?{label:prefix?.[1]||'',parts}:null;
 }
 const separatedNumbers=value=>/[0-9０-９]\s+[0-9０-９]/.test(String(value));
+const tidyShortAnswer=value=>String(value??'').trim().replace(/[.!?。！？]+$/g,'').trim();
+const comparableNotation=value=>mathNotation(tidyShortAnswer(value));
 function shortAnswerMatches(expected,actual){
  if(separatedNumbers(actual))return false;
  const wanted=splitAnswerList(expected),given=splitAnswerList(actual);
- if(wanted){if(!given||given.label!==wanted.label||given.parts.length!==wanted.parts.length||given.parts.some(x=>!x))return false;const a=wanted.parts.map(mathNotation).sort(),b=given.parts.map(mathNotation).sort();return a.every((x,i)=>x===b[i])}
- if(given)return false;return mathNotation(expected)===mathNotation(actual);
+ if(wanted){if(!given||given.label!==wanted.label||given.parts.length!==wanted.parts.length||given.parts.some(x=>!x))return false;const a=wanted.parts.map(comparableNotation).sort(),b=given.parts.map(comparableNotation).sort();return a.every((x,i)=>x===b[i])}
+ if(given)return false;return comparableNotation(expected)===comparableNotation(actual);
 }
 async function evaluateAnswers(answers,set){const hashes=parse(set.hashes_json,[]),keys=parse(set.answer_keys_json,null);return Promise.all(Array.from({length:set.question_count},async(_,i)=>{if(!normalizeAnswer(answers[i]))return false;if(keys?.[i]){return answerVariants(keys[i].answer).some(v=>keys[i].type==='choice'?normalizeAnswer(v)===normalizeAnswer(answers[i]):shortAnswerMatches(v,answers[i]))}return !!hashes[i]?.includes(await answerHash(set.salt,answers[i]))}))}
 
